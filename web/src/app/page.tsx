@@ -21,35 +21,14 @@ const EmotionDetector = dynamic(() => import("@/components/EmotionDetector"), {
 });
 
 export default function Home() {
-  const techStack = [
-    "Python",
-    "Keras",
-    "OpenCV",
-    "TensorFlow.js",
-    "Next.js",
-    "Vercel"
-  ];
-
   return (
     <div className={styles.page}>
       <main className={styles.main}>
         {/* Header Branding */}
         <section className={styles.headerSection}>
           <h1 className={styles.titleGlow}>
-            Real-Time Facial Emotion Recognition
+            Project Manas
           </h1>
-          <p className={styles.description}>
-            This application uses a custom-trained deep CNN model running entirely on the client side. 
-            A face detector extracts bounding boxes, which are normalized into 48x48 grayscale inputs, 
-            and classified into 7 core human emotions in real time.
-          </p>
-          <div className={styles.techStack}>
-            {techStack.map((tech) => (
-              <span key={tech} className={styles.techBadge}>
-                {tech}
-              </span>
-            ))}
-          </div>
         </section>
 
         {/* Emotion Recognition Web Interface */}

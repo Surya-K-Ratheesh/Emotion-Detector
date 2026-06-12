@@ -1,7 +1,7 @@
 .container {
   display: flex;
-  flex-direction: row;
-  gap: 2rem;
+  justify-content: center;
+  align-items: center;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
@@ -18,10 +18,9 @@
 /* Webcam Container Panel */
 .videoWrapper {
   position: relative;
-  flex: 1.2;
   width: 100%;
-  aspect-ratio: 4/3;
-  max-width: 640px;
+  aspect-ratio: 16/9;
+  max-width: 1000px;
   background-color: #0b0b0f;
   border-radius: 16px;
   overflow: hidden;
@@ -44,6 +43,7 @@
   height: 100%;
   pointer-events: none;
   transform: scaleX(-1); /* Mirror overlays to match camera feed */
+  z-index: 10;
 }
 
 /* Scanner Line Animation */
@@ -338,4 +338,167 @@
   font-size: 0.9rem;
   color: #a4b0be;
   line-height: 1.5;
+}
+
+/* Futuristic HUD and Tracking Box Styles */
+.trackingCorner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid;
+  pointer-events: none;
+}
+
+.trackingCornerTopLeft {
+  top: 0;
+  left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+
+.trackingCornerTopRight {
+  top: 0;
+  right: 0;
+  border-left: none;
+  border-bottom: none;
+}
+
+.trackingCornerBottomLeft {
+  bottom: 0;
+  left: 0;
+  border-right: none;
+  border-top: none;
+}
+
+.trackingCornerBottomRight {
+  bottom: 0;
+  right: 0;
+  border-left: none;
+  border-top: none;
+}
+
+.multiComponentDataBox {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+
+.multiComponentConnectingLine {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 8px;
+}
+
+.hudIdBadge {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.hudPanel {
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 180px;
+  backdrop-filter: blur(4px);
+}
+
+.hudCoordinatesPanel {
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+}
+
+.hudTitle {
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.hudBars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hudBarRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: monospace;
+  font-size: 10px;
+  color: #a4b0be;
+}
+
+.hudBarBg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  position: relative;
+}
+
+.hudBarFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 1px;
+}
+
+.hudDataValue {
+  min-width: 30px;
+  text-align: right;
+  font-weight: bold;
+}
+
+.hudLabel {
+  width: 55px;
+}
+
+.hudCrosshair {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1px solid;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+
+
+.pulseAnim {
+  animation: pulse 2s infinite alternate;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
 }

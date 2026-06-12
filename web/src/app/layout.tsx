@@ -5,8 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Real-Time Facial Emotion Recognition",
-  description: "Detect human expressions in real time using your webcam, face-api, and a custom CNN trained in Keras and exported to TensorFlow.js.",
+  title: "Project Manas",
 };
 
 export default function RootLayout({

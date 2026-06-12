@@ -19,16 +19,6 @@ const EMOTION_COLORS: Record<string, string> = {
   Neutral: "#70a1ff"
 };
 
-// Emojis mapping
-const EMOTION_EMOJIS: Record<string, string> = {
-  Angry: "😠",
-  Disgust: "🤢",
-  Fear: "😨",
-  Happy: "😊",
-  Sad: "😢",
-  Surprise: "😲",
-  Neutral: "😐"
-};
 
 export default function EmotionDetector() {
   const webcamRef = useRef<Webcam>(null);
@@ -40,23 +30,27 @@ export default function EmotionDetector() {
   const [status, setStatus] = useState<string>("Initializing...");
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isActive, setIsActive] = useState<boolean>(true);
+  const [isActive] = useState<boolean>(true);
 
   // Statistics & Real-time prediction states
-  const [inferenceTime, setInferenceTime] = useState<number>(0);
-  const [fps, setFps] = useState<number>(0);
-  const [dominantEmotion, setDominantEmotion] = useState<{ label: string; confidence: number }>({
-    label: "Neutral",
-    confidence: 0
-  });
-  const [emotionDistribution, setEmotionDistribution] = useState<Record<string, number>>(
-    EMOTIONS.reduce((acc, curr) => ({ ...acc, [curr]: 0 }), {})
-  );
+  // HUD Tracking box state
+  const [trackingBox, setTrackingBox] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    color: string;
+    emotionLabel: string;
+    confidence: number;
+    distribution: Record<string, number>;
+    rawX: number;
+    rawY: number;
+  } | null>(null);
 
   // Video resolution
   const videoConstraints = {
-    width: 640,
-    height: 480,
+    width: 1280,
+    height: 720,
     facingMode: "user"
   };
 
@@ -70,7 +64,6 @@ export default function EmotionDetector() {
 
         setStatus("Loading Face Detection model...");
         // Load tinyFaceDetector weights from the static /models/faceapi directory
-        const faceApiOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 });
         await faceapi.nets.tinyFaceDetector.loadFromUri("/models/faceapi");
 
         setStatus("Loading Emotion Classifier...");
@@ -82,7 +75,7 @@ export default function EmotionDetector() {
           setStatus("Models loaded successfully. Camera initializing...");
           setIsLoaded(true);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error loading models:", err);
         if (active) {
           setError(
@@ -107,10 +100,6 @@ export default function EmotionDetector() {
 
   // Frame processing loop
   useEffect(() => {
-    let lastTime = performance.now();
-    let frameCount = 0;
-    let fpsInterval = performance.now();
-
     async function processFrame() {
       if (!isActive || !isLoaded || !emotionModelRef.current) {
         animationFrameId.current = requestAnimationFrame(processFrame);
@@ -144,15 +133,19 @@ export default function EmotionDetector() {
       // Clear the overlay canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Draw a bright red border to verify if the canvas layer is visible on screen
+      ctx.strokeStyle = "rgba(255, 0, 0, 0.8)";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
       try {
         // 1. Detect single face bounding box
         const detection = await faceapi.detectSingleFace(
           video,
-          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+          new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.25 })
         );
 
         if (detection) {
-          const t0 = performance.now();
           const { x, y, width: w, height: h } = detection.box;
 
           // Align crop to be a bit more square and padded (standard for training images)
@@ -162,6 +155,19 @@ export default function EmotionDetector() {
           const cropY = Math.max(0, y - padY);
           const cropW = Math.min(videoWidth - cropX, w + 2 * padX);
           const cropH = Math.min(videoHeight - cropY, h + 2 * padY);
+
+          // Tight bounding box for visual overlay (hairline to chin)
+          const tightX = x + w * 0.15;
+          const tightY = y + h * 0.1;
+          const tightW = w * 0.7;
+          const tightH = h * 0.85;
+
+          // Responsive Percentages (mirrored X to match CSS transform scaleX(-1))
+          const leftPercent = (tightX / videoWidth) * 100;
+          const topPercent = (tightY / videoHeight) * 100;
+          const widthPercent = (tightW / videoWidth) * 100;
+          const heightPercent = (tightH / videoHeight) * 100;
+          const mirroredLeftPercent = 100 - leftPercent - widthPercent;
 
           // 2. Preprocess cropped face to 48x48 Grayscale image
           const cropCanvas = document.createElement("canvas");
@@ -192,9 +198,6 @@ export default function EmotionDetector() {
             const probs = await predictions.data();
             predictions.dispose();
 
-            const t1 = performance.now();
-            setInferenceTime(Math.round(t1 - t0));
-
             // 3. Compute dominant emotion and distribution state
             const distribution: Record<string, number> = {};
             let maxIdx = 0;
@@ -209,64 +212,27 @@ export default function EmotionDetector() {
               }
             });
 
-            setEmotionDistribution(distribution);
-            setDominantEmotion({
-              label: EMOTIONS[maxIdx],
-              confidence: maxVal
+            // 4. Update HUD tracking state instead of drawing on canvas
+            setTrackingBox({
+              x: mirroredLeftPercent,
+              y: topPercent,
+              w: widthPercent,
+              h: heightPercent,
+              color: EMOTION_COLORS[EMOTIONS[maxIdx]],
+              emotionLabel: EMOTIONS[maxIdx],
+              confidence: maxVal,
+              distribution: distribution,
+              rawX: Math.round(x),
+              rawY: Math.round(y)
             });
-
-            // 4. Render Bounding Box and Overlay on Canvas
-            const boxColor = EMOTION_COLORS[EMOTIONS[maxIdx]];
             
-            // Draw Box with Neon Glow
-            ctx.strokeStyle = boxColor;
-            ctx.lineWidth = 4;
-            ctx.shadowColor = boxColor;
-            ctx.shadowBlur = 15;
-            
-            // Draw rounded rectangle
-            const radius = 12;
-            ctx.beginPath();
-            ctx.moveTo(x + radius, y);
-            ctx.lineTo(x + w - radius, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-            ctx.lineTo(x + w, y + h - radius);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-            ctx.lineTo(x + radius, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-            ctx.lineTo(x, y + radius);
-            ctx.quadraticCurveTo(x, y, x + radius, y);
-            ctx.closePath();
-            ctx.stroke();
-
-            // Text Label Box
-            ctx.shadowBlur = 0; // Disable shadow for text readability
-            ctx.fillStyle = "rgba(10, 10, 10, 0.75)";
-            const text = `${EMOTION_EMOJIS[EMOTIONS[maxIdx]]} ${EMOTIONS[maxIdx]} (${Math.round(maxVal * 100)}%)`;
-            ctx.font = "bold 16px sans-serif";
-            const textWidth = ctx.measureText(text).width;
-            
-            ctx.fillRect(x - 2, y - 35, textWidth + 20, 30);
-            
-            // Text Color Accent
-            ctx.fillStyle = boxColor;
-            ctx.fillText(text, x + 8, y - 14);
           }
         } else {
-          // Fade predictions when no face is present
-          setDominantEmotion(prev => ({ ...prev, confidence: prev.confidence * 0.9 }));
+          // Reset predictions to zero when no face is present
+          setTrackingBox(null);
         }
       } catch (err) {
         console.error("Frame processing error:", err);
-      }
-
-      // Compute Frame Rate (FPS)
-      frameCount++;
-      const now = performance.now();
-      if (now - fpsInterval >= 1000) {
-        setFps(Math.round((frameCount * 1000) / (now - fpsInterval)));
-        frameCount = 0;
-        fpsInterval = now;
       }
 
       animationFrameId.current = requestAnimationFrame(processFrame);
@@ -282,21 +248,6 @@ export default function EmotionDetector() {
       }
     };
   }, [isLoaded, isActive]);
-
-  const toggleTracking = () => {
-    setIsActive(!isActive);
-    if (!isActive) {
-      setStatus("Tracking active");
-    } else {
-      setStatus("Tracking paused");
-      // Clear canvas overlay when tracking paused
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      }
-    }
-  };
 
   if (error) {
     return (
@@ -318,10 +269,114 @@ export default function EmotionDetector() {
             <p className={styles.loadingText}>{status}</p>
           </div>
         )}
-        
-        {/* Animated Scanning Line overlay */}
-        {isLoaded && isActive && <div className={styles.scannerLine} />}
 
+        {/* HUD Diagnostic Overlay */}
+        {isLoaded && (
+          <div style={{
+            position: "absolute",
+            top: "12px",
+            left: "12px",
+            background: "rgba(10, 10, 15, 0.85)",
+            backdropFilter: "blur(4px)",
+            color: "#a4b0be",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            fontSize: "11px",
+            fontFamily: "monospace",
+            zIndex: 100,
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            pointerEvents: "none"
+          }}>
+            Detector Sensitivity: 0.25<br />
+            System Status: {isActive ? "Active" : "Paused"} | {trackingBox ? "Face DETECTED" : "Searching..."}
+          </div>
+        )}
+
+        {/* Futuristic HTML Tracking Box and HUD */}
+        {trackingBox && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${trackingBox.x}%`,
+              top: `${trackingBox.y}%`,
+              width: `${trackingBox.w}%`,
+              height: `${trackingBox.h}%`,
+              border: `2px solid ${trackingBox.color}`,
+              boxShadow: `0 0 15px ${trackingBox.color}, inset 0 0 15px ${trackingBox.color}`,
+              pointerEvents: "none",
+              zIndex: 50,
+            }}
+          >
+            {/* Tracking Corners */}
+            <div className={`${styles.trackingCorner} ${styles.trackingCornerTopLeft}`} style={{ borderColor: trackingBox.color }}></div>
+            <div className={`${styles.trackingCorner} ${styles.trackingCornerTopRight}`} style={{ borderColor: trackingBox.color }}></div>
+            <div className={`${styles.trackingCorner} ${styles.trackingCornerBottomLeft}`} style={{ borderColor: trackingBox.color }}></div>
+            <div className={`${styles.trackingCorner} ${styles.trackingCornerBottomRight}`} style={{ borderColor: trackingBox.color }}></div>
+
+            {/* Crosshairs */}
+            <div className={`${styles.hudCrosshair} ${styles.pulseAnim}`} style={{ top: "0%", left: "50%", borderColor: trackingBox.color }}></div>
+            <div className={`${styles.hudCrosshair} ${styles.pulseAnim}`} style={{ top: "100%", left: "50%", borderColor: trackingBox.color }}></div>
+            <div className={`${styles.hudCrosshair} ${styles.pulseAnim}`} style={{ top: "50%", left: "0%", borderColor: trackingBox.color }}></div>
+            <div className={`${styles.hudCrosshair} ${styles.pulseAnim}`} style={{ top: "50%", left: "100%", borderColor: trackingBox.color }}></div>
+            
+            {/* Multi-component Unified Data Box Anchored Above */}
+            <div className={styles.multiComponentDataBox} style={{ borderColor: trackingBox.color }}>
+              
+              {/* Connecting line to the box */}
+              <div className={styles.multiComponentConnectingLine} style={{ backgroundColor: trackingBox.color }}></div>
+
+              {/* ID Badge */}
+              <div className={styles.hudIdBadge} style={{ background: trackingBox.color, color: "#000" }}>
+                ID: 001
+              </div>
+
+              {/* Top HUD Panel */}
+              <div className={styles.hudPanel} style={{ borderColor: trackingBox.color, boxShadow: `0 10px 20px rgba(0,0,0,0.3)` }}>
+                <div className={styles.hudTitle} style={{ color: trackingBox.color }}>
+                  {trackingBox.emotionLabel}
+                </div>
+                
+                <div className={styles.hudBars}>
+                  {Object.entries(trackingBox.distribution)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 3)
+                    .map(([emotion, prob]) => {
+                      const isTop = emotion === trackingBox.emotionLabel;
+                      return (
+                        <div key={emotion} className={styles.hudBarRow}>
+                          <div className={styles.hudBarBg}>
+                            <div 
+                              className={styles.hudBarFill} 
+                              style={{ 
+                                width: `${prob * 100}%`,
+                                background: isTop ? trackingBox.color : EMOTION_COLORS[emotion] || "#a4b0be",
+                                boxShadow: `0 0 5px ${isTop ? trackingBox.color : "transparent"}`
+                              }}
+                            ></div>
+                          </div>
+                          <div className={styles.hudDataValue}>
+                            {Math.round(prob * 100)}%
+                          </div>
+                          <div className={styles.hudLabel} style={{ color: isTop ? trackingBox.color : "#a4b0be" }}>
+                            {emotion.toUpperCase()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Coordinates Block */}
+              <div className={styles.hudCoordinatesPanel} style={{ borderColor: trackingBox.color, color: trackingBox.color }}>
+                x: {trackingBox.rawX}<br />
+                y: {trackingBox.rawY}<br />
+                Confidence: {Math.round(trackingBox.confidence * 100)}%
+              </div>
+
+            </div>
+          </div>
+        )}
+        
         <Webcam
           ref={webcamRef}
           audio={false}
@@ -331,83 +386,6 @@ export default function EmotionDetector() {
         />
         
         <canvas ref={canvasRef} className={styles.overlayCanvas} />
-      </div>
-
-      {/* Dashboard Analytics Panel */}
-      <div className={styles.dashboard}>
-        <div className={styles.header}>
-          <h2>Live Analytics</h2>
-          <div className={styles.stats}>
-            <span className={`${styles.badge} ${isActive ? styles.badgeActive : styles.badgeInactive}`}>
-              {isActive ? "LIVE SCANNING" : "PAUSED"}
-            </span>
-            {isLoaded && (
-              <>
-                <span className={styles.badge}>Inference: {inferenceTime}ms</span>
-                <span className={styles.badge}>FPS: {fps}</span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Dominant Emotion Output */}
-        <div 
-          className={styles.dominantPanel} 
-          style={{ borderColor: dominantEmotion.confidence > 0.1 ? EMOTION_COLORS[dominantEmotion.label] : "#222" }}
-        >
-          <div className={styles.dominantEmoji}>
-            {dominantEmotion.confidence > 0.1 ? EMOTION_EMOJIS[dominantEmotion.label] : "🔍"}
-          </div>
-          <div className={styles.dominantMeta}>
-            <span className={styles.label}>DOMINANT EXPRESSION</span>
-            <span className={styles.value}>
-              {dominantEmotion.confidence > 0.1 ? dominantEmotion.label : "Detecting..."}
-            </span>
-            <span className={styles.confidence}>
-              {dominantEmotion.confidence > 0.1 ? `${Math.round(dominantEmotion.confidence * 100)}% Confidence` : "Scan your face"}
-            </span>
-          </div>
-        </div>
-
-        {/* Emotion Distribution Bars */}
-        <div className={styles.distributionContainer}>
-          <h3>Probability Distribution</h3>
-          <div className={styles.barsList}>
-            {EMOTIONS.map((emotion) => {
-              const confidence = emotionDistribution[emotion] || 0;
-              const color = EMOTION_COLORS[emotion];
-              return (
-                <div key={emotion} className={styles.barItem}>
-                  <div className={styles.barHeader}>
-                    <span>{EMOTION_EMOJIS[emotion]} {emotion}</span>
-                    <span>{Math.round(confidence * 100)}%</span>
-                  </div>
-                  <div className={styles.barBackground}>
-                    <div 
-                      className={styles.barFill} 
-                      style={{ 
-                        width: `${confidence * 100}%`,
-                        backgroundColor: color,
-                        boxShadow: `0 0 8px ${color}`
-                      }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Controls */}
-        <div className={styles.controls}>
-          <button 
-            onClick={toggleTracking} 
-            disabled={!isLoaded}
-            className={`${styles.btn} ${isActive ? styles.btnPause : styles.btnPlay}`}
-          >
-            {isActive ? "Pause Analysis" : "Resume Analysis"}
-          </button>
-        </div>
       </div>
     </div>
   );

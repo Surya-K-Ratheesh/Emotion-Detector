@@ -234,7 +234,7 @@ def main():
     batch_size = 64
     
     print("Starting training...")
-    history = model.fit(
+    model.fit(
         datagen.flow(X_train, y_train, batch_size=batch_size),
         steps_per_epoch=len(X_train) // batch_size,
         epochs=epochs,
